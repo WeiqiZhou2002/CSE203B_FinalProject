@@ -1,0 +1,127 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\title{\textbf{Project Report: Convex Relaxation for E-VRPTW}}
+\author{Weiqi Zhou, Junhan Chen, Xinzi Huang, Yiqian Liu}
+\date{March 2026}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+\textbf{Motivation:} Electric Vehicle (EV) logistics face significant constraints due to limited battery capacity and lengthy recharging times. While heuristic and metaheuristic methods construct feasible routes quickly, they treat the objective as a black box and offer no guarantees of global optimality or theoretical lower bounds to assess solution quality. \\
+\textbf{Previous Works:} Standard approaches for the Electric Vehicle Routing Problem with Time Windows (E-VRPTW) often rely on Variable Neighborhood Search (VNS), Tabu Search, or Ant Colony Optimization. Very few works explore the problem's geometric or convex properties to establish strong bounds.\\
+\textbf{Intended Contributions:} This project pivots from heuristic search to \textbf{Convex Optimization}. By formulating the E-VRPTW as a Mixed-Integer Convex Program (MICP), we apply \textbf{Lagrangian Relaxation} to decouple complex constraints (time windows, load, and battery capacity). This theoretically rigorous approach allows us to establish baseline optimality certificates computationally using Subgradient Optimization.\\
+\textbf{Organization:} This report formally defines the Primal integer problem (Section 2.1), derives its Dual formulation via Lagrangian Relaxation (Section 2.2), discusses the continuous KKT optimality conditions (Section 2.3), details the Subgradient Optimization Algorithm (Section 3), and concludes with experimental results and duality gap analysis computed across various benchmark instances (Section 4 \& 5).
+
+\section{Statement of the Problem}
+We define the problem on a directed graph $G=(V, A)$. Let $C$ be the customer set, $F$ the charging stations, and node $0$ the depot. The objective is to minimize total travel time/distance for a fleet of $m$ vehicles. Let $x_{ij} \in \{0, 1\}$ equal $1$ if a vehicle travels from node $i$ to $j$. Variables $\tau_i, u_i, y_i$ capture the arrival time, remaining load, and remaining battery upon departure from node $i$. Variables $d_{ij}, t_{ij}, e_{ij}, q_i$ encode distance, travel time, energy cost, and demand respectively.
+
+\subsection{Primal Formulation (Integer/Non-Convex)}
+\textbf{Objective:} Minimize the total traveled distance.
+\begin{align}
+    \min_{x, \tau, u, y} \quad & \sum_{(i,j) \in A} d_{ij} x_{ij} 
+\end{align}
+\textbf{Subject to:} 
+\begin{align}
+    \sum_{j \in V} x_{ij} &= 1 & \forall i \in C \label{c:degree}\\
+    \sum_{i \in V} x_{ij} - \sum_{i \in V} x_{ji} &= 0 & \forall j \in (C \cup F) \label{c:flow} \\
+    \tau_j &\ge \tau_i + s_i + t_{ij} - M_T(1 - x_{ij}) & \forall (i,j) \in A \label{c:time} \\
+    u_j &\le u_i - q_i + M_L(1 - x_{ij}) & \forall (i,j) \in A \label{c:load} \\
+    y_j &\le y_i - e_{ij} + M_B(1 - x_{ij}) & \forall (i,j) \in A, \, j \notin F \label{c:battery} \\
+    RD_i &\le \tau_i \le DD_i & \forall i \in V \\
+    0 &\le u_i \le C, \quad 0 \le y_i \le Q & \forall i \in V \\
+    x_{ij} &\in \{0, 1\} & \forall (i,j) \in A
+\end{align}
+
+\subsection{Dual Formulation (Lagrangian Relaxation)}
+To simplify the primal computational burden, we relax the challenging ``Big-M'' coupling constraints (\ref{c:time}), (\ref{c:load}), and (\ref{c:battery}) by bringing them into the objective function. By introducing non-negative Lagrange multipliers $\lambda^T_{ij}, \lambda^L_{ij}, \lambda^B_{ij} \ge 0$, we penalize any violation of the time windows, vehicle load limits, and battery capacities. Note that for the continuous LP relaxation baseline, the binary variables $x_{ij}$ are relaxed to $[0,1]$.
+
+The Lagrangian function is formulated by adding the penalized terms to the original objective:
+\begin{footnotesize}
+\begin{align*}
+    L(x, \tau, u, y, \lambda) = \sum_{(i,j) \in A} d_{ij} x_{ij} 
+    &+ \sum_{(i,j) \in A} \lambda^T_{ij} \Big(\tau_i - \tau_j + s_i + t_{ij} - M_T(1 - x_{ij})\Big) \\
+    &+ \sum_{(i,j) \in A} \lambda^L_{ij} \Big(u_i - u_j + q_i - M_L(1 - x_{ij})\Big) \\
+    &+ \sum_{\substack{(i,j) \in A \\ j \notin F}} \lambda^B_{ij} \Big(y_i - y_j + e_{ij} - M_B(1 - x_{ij})\Big)
+\end{align*}
+\end{footnotesize}
+
+By rearranging the terms with respect to the continuous variables $\tau, u$, and $y$, the Lagrangian function effectively decouples the structural routing decisions (which nodes to visit) from the temporal and resource-based sequencing decisions.
+
+The \textbf{Lagrangian Dual Function} $g(\lambda)$ is defined by minimizing this Lagrangian over the remaining feasible region $X$:
+\[ g(\lambda) = \min_{x, \tau, u, y \in X} L(x, \tau, u, y, \lambda) \]
+where $X$ captures the remaining hard constraints: the degree constraints (\ref{c:degree}), flow conservation (\ref{c:flow}), and variable bounding constraints. Because the complicating path-dependent constraints have been relaxed, solving for $g(\lambda)$ simplifies into a Minimum Cost Network Flow Optimization or an Assignment-like structure, which can be solved efficiently.
+
+The \textbf{Lagrangian Dual Problem} aims to find the tightest possible lower bound by maximizing the dual function over all non-negative multiplier combinations:
+\begin{align}
+    \max_{\lambda \ge 0} \quad g(\lambda)
+\end{align}
+Because $g(\lambda)$ is the pointwise minimum of a family of affine functions (one for each feasible primal solution), the dual function is piecewise linear and strictly concave. This mathematical property guarantees that we can search for the maximal bound without getting trapped in local maxima, motivating our use of subgradient search techniques.
+
+\subsection{KKT Optimality Conditions}
+For the continuous LP relaxation ($0 \le x_{ij} \le 1$), the problem satisfies Slater's condition and is strictly convex. A primal-dual pair $(x^*, \tau^*, u^*, y^*, \lambda^*)$ optimally solves the relaxation if and only if it satisfies the Karush-Kuhn-Tucker (KKT) conditions:
+\begin{itemize}
+    \item \textbf{Primal Feasibility:} Constraints (\ref{c:degree}) -- (\ref{c:battery}) hold with $x_{ij}^* \in [0,1]$.
+    \item \textbf{Dual Feasibility:} $\lambda^{T*}_{ij} \ge 0, \lambda^{L*}_{ij} \ge 0, \lambda^{B*}_{ij} \ge 0$.
+    \item \textbf{Complementary Slackness:} Multipliers are nonzero only when the primal constraints are tight. E.g., $\lambda^{T*}_{ij} \cdot (\tau_i^* - \tau_j^* + s_i + t_{ij} - M_T(1 - x_{ij}^*)) = 0$.
+    \item \textbf{Stationarity:} The gradient of $L(x, \tau, u, y, \lambda^*)$ with respect to the primal continuous variables evaluates to zero (identifying extreme points of the gradient).
+\end{itemize}
+
+\section{Intended Approaches}
+Because the dual function $g(\lambda)$ is piecewise linear and concave, but non-differentiable at junction solutions, standard gradient ascent cannot reliably converge. Thus, we implemented the \textbf{Subgradient Optimization Method}.
+\begin{algorithm}[H]
+\caption{Subgradient Optimization iteratively solving $g(\lambda)$}
+\begin{algorithmic}[1]
+\STATE Initialize multipliers $\lambda^T_{ij} = \lambda^L_{ij} = \lambda^B_{ij} = 0$, iteration $k=0$, $\alpha = 2.0$.
+\WHILE{$k < K_{max}$ and $\alpha > \epsilon$}
+    \STATE Solve Lagrangian Subproblem $g(\lambda^k)$ using CBC LP Solver to obtain primal vector $(x^k, \tau^k, u^k, y^k)$.
+    \STATE Evaluate subgradients $v^T, v^L, v^B$ representing constraint violations (e.g. $v^T_{ij} = \tau_i^k - \tau_j^k + \dots$).
+    \STATE Calculate step size $\theta^k = \alpha \frac{UB - g(\lambda^k)}{||v^T||^2 + ||v^L||^2 + ||v^B||^2}$.
+    \STATE Update multipliers: $\lambda_{ij}^{k+1} = \max(0, \lambda_{ij}^k + \theta^k v_{ij}^k)$.
+    \STATE Adjust $\alpha = \alpha / 2$ if no bound improvement occurs over $P$ iterations.
+\ENDWHILE
+\end{algorithmic}
+\end{algorithm}
+
+\section{Experimental Duality Gap Analysis}
+We computationally implemented the framework natively using Python's \texttt{PuLP} framework running over the CBC solver engine. We benchmarked the E-VRPTW baseline LP Bound against our proposed subgradient LR Bound upon Schneider et al.'s 2014 synthetic benchmark clusters.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    \textbf{Instance} & \textbf{Customers} & \textbf{Continuous LP Bound} & \textbf{Lagrangian Bound} & \textbf{Gap (\%)} \\
+    \midrule
+    \texttt{c103C5} & 5 & 113.93 & 106.46 & $-6.56\%$ \\
+    \texttt{c101C5} & 5 & 145.36 & 130.93 & $-9.93\%$ \\
+    \texttt{c202C10} & 10 & 132.68 & 129.64 & $-2.29\%$ \\
+    \texttt{c101C10} & 10 & 154.68 & 148.88 & $-3.75\%$ \\
+    \bottomrule
+    \end{tabular}
+    \caption{Empirical evaluation of the LP Bound vs our Lagrangian bounding execution convergence.}
+\end{table}
+
+\section{Conclusion}
+\textbf{Conjectured Validation and Summary:} Our outlined hypothesis postulated that Lagrangian Relaxation could potentially yield a tighter optimality certificate bound. However, our formalized implementation explicitly demonstrates a central mathematical property: because our decomposed subproblem strips routing complexity directly down into flow conservation and set degree constraints, the subproblem inherits the \textbf{Integrality Property}. Consequently, optimization geometry dictates that the theoretical Lagrangian Dual bound precisely coincides with the continuous LP relaxation ($Z_{LR} = Z_{LP}$). Therefore, computationally, the iteratively optimized $Z_{LR}$ approaches $Z_{LP}$ asymptotically from below (as evidenced by $<10\%$ negative gap bounds) rather than surpassing it. 
+
+\textbf{Future Works:} Extending this robust theoretical bounding groundwork via Dantzig-Wolfe decomposition and Branch-and-Price algorithms. Unlike standard subproblems, retaining the time windows recursively as an Elementary Shortest Path Problem with Resource Constraints (ESPPRC) effectively breaks the integrality property, granting access strictly tighter optimal bounds vital for large-scale E-VRPTW fleets.
+
+\section*{References}
+\begin{enumerate} [label={[\arabic*]}]
+    \item Schneider, M., Stenger, A., \& Goeke, D. (2014). "The electric vehicle-routing problem with time windows and recharging stations." \textit{Transportation Science}, 48(4), 500-520.
+    \item Verma, A. (2018). "Electric vehicle routing problem with time windows, recharging stations and battery swapping stations." \textit{EURO Journal on Transportation and Logistics}, 7(4), 415-451.
+    \item Xiao, Y., Zhang, Y., Kaku, I., Kang, R., \& Pan, X. (2021). "Electric vehicle routing problem: A systematic review and a new comprehensive model with nonlinear energy recharging and consumption." \textit{Renewable and Sustainable Energy Reviews}, 151, 111567.
+    \item Zhou, Y., Lei, Q., Li, L., \& Wu, Z. (2025). "An Overview of Energy Replenishment Strategies for the Electric Vehicle Routing Problem: Models and Solution Algorithms." \textit{Energies}, 18(23), 6196.
+    \item Donval, V., Beraud, J.-F., Montenegro, T., \& Romet, P. (2026). "Ant Colony Optimization with Dynamic Pheromones for Electric Vehicle Routing and Charging Decisions." \textit{Sustainability}, 18(1), 417.
+\end{enumerate}
+\end{document}
