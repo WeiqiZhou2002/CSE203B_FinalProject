@@ -2,6 +2,7 @@ import os
 import glob
 import csv
 import time
+import matplotlib.pyplot as plt
 from data_parser import parse_instance
 from lp_model import build_lp_model
 from subgradient_solver import subgradient_optimization
@@ -35,9 +36,9 @@ def analyze_gap(instance_path, max_iter=150):
     }
 
 def run_analysis():
-    # Gather a few small instances to test
+    # Gather all small instances to test
     instances = glob.glob('evrptw_instances/*C5.txt') + glob.glob('evrptw_instances/*C10.txt')
-    instances = sorted(instances)[:5]  # Just take the first 5 for the demo run
+    instances = sorted(instances)
     
     results = []
     for inst in instances:
@@ -65,6 +66,30 @@ def run_analysis():
         print("\n--- Analysis Complete ---")
         for r in results:
             print(f"{r['Instance']}: LP={r['LP_Bound']}, LR={r['LR_Bound']}, Gap={r['Gap_%']}%")
+            
+        # Generate plot
+        valid_results = [r for r in results if r['LP_Bound'] is not None and r['LR_Bound'] is not None]
+        if valid_results:
+            labels = [r['Instance'].replace('.txt', '') for r in valid_results]
+            lp_vals = [r['LP_Bound'] for r in valid_results]
+            lr_vals = [r['LR_Bound'] for r in valid_results]
+            
+            x = range(len(labels))
+            width = 0.35
+            
+            fig, ax = plt.subplots(figsize=(10, 6))
+            rects1 = ax.bar([pos - width/2 for pos in x], lp_vals, width, label='LP Bound', color='skyblue')
+            rects2 = ax.bar([pos + width/2 for pos in x], lr_vals, width, label='LR Bound', color='salmon')
+            
+            ax.set_ylabel('Objective Value (Travel Time/Distance)')
+            ax.set_title('Comparison of LP vs LR Bounding across Small Instances')
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels, rotation=45, ha="right")
+            ax.legend()
+            
+            fig.tight_layout()
+            plt.savefig("duality_gap_plot.png", dpi=300)
+            print("Generated duality_gap_plot.png")
 
     
 if __name__ == "__main__":

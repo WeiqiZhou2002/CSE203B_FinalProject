@@ -1,6 +1,6 @@
 # Fdb version 4
-["pdflatex"] 1773435138.46318 "/Users/zhouweiqi/Desktop/2026Winter/CSE203B/project/main.tex" "main.pdf" "main" 1773435138.91031 0
-  "/Users/zhouweiqi/Desktop/2026Winter/CSE203B/project/main.tex" 1773435137.29015 9800 c3e4628fa0884d7c03b402d885536e66 ""
+["pdflatex"] 1773444416.54808 "/Users/zhouweiqi/Desktop/2026Winter/CSE203B/project/main.tex" "main.pdf" "main" 1773444417.32522 0
+  "/Users/zhouweiqi/Desktop/2026Winter/CSE203B/project/main.tex" 1773444416.35934 13006 bea62014c37f3828b160f924c2fb1399 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1136849721 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/jknappen/ec/tcrm1095.tfm" 1136768653 1536 02c06700a42be0f5a28664c7273f82e7 ""
@@ -89,8 +89,9 @@
   "/usr/local/texlive/2025/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1769755488 5467155 19efa205003f9ecad95fbbaa6ff24da1 ""
   "/usr/local/texlive/2025/texmf-var/web2c/pdftex/pdflatex.fmt" 1741450574 3345740 46b66fdb0378f7bf5921b5eabf1762b8 ""
   "/usr/local/texlive/2025/texmf.cnf" 1741450484 577 418a7058ec8e006d8704f60ecd22c938 ""
-  "main.aux" 1773435138.85137 1520 c760007109d5ab4cb446f70e3d925eb2 "pdflatex"
-  "main.tex" 1773435137.29015 9800 c3e4628fa0884d7c03b402d885536e66 ""
+  "duality_gap_plot.png" 1773444226.00195 163891 a43376663af46f6e495ef2f59decf291 ""
+  "main.aux" 1773444417.25887 630 15da3908a8f174eae6b6777b05cb3fa4 "pdflatex"
+  "main.tex" 1773444416.35934 13006 bea62014c37f3828b160f924c2fb1399 ""
   (generated)
   "main.aux"
   "main.log"

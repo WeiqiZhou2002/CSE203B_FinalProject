@@ -1,6 +1,7 @@
 \documentclass[11pt]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[margin=1in]{geometry}
+\usepackage{mathptmx} % Professional Times New Roman font
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsthm}
@@ -19,9 +20,11 @@
 
 \section{Introduction}
 \textbf{Motivation:} Electric Vehicle (EV) logistics face significant constraints due to limited battery capacity and lengthy recharging times. While heuristic and metaheuristic methods construct feasible routes quickly, they treat the objective as a black box and offer no guarantees of global optimality or theoretical lower bounds to assess solution quality. \\
-\textbf{Previous Works:} Standard approaches for the Electric Vehicle Routing Problem with Time Windows (E-VRPTW) often rely on Variable Neighborhood Search (VNS), Tabu Search, or Ant Colony Optimization. Very few works explore the problem's geometric or convex properties to establish strong bounds.\\
+\textbf{Previous Works:} The foundation of the Electric Vehicle Routing Problem with Time Windows (E-VRPTW) was formally established by Schneider et al. [1], who modeled the core constraints of limited battery capacities and restricted recharging stations, solving it via a hybrid Variable Neighborhood Search (VNS) and Tabu Search heuristic. Building upon this, subsequent research expanded the logistical scope to improve computational and operational efficiency. Verma [2] introduced multi-modal replenishment by integrating battery swapping stations to bypass long recharging times, while Xiao et al. [3] formulated a comprehensive model reflecting nonlinear energy consumption realities.\\
+
+Despite structural advancements, the predominant solution paradigms have remained overwhelmingly heuristic. As highlighted in a recent survey by Zhou et al. [4], the literature heavily favors metaheuristic algorithms designed for rapid, feasible approximations over exact mathematical certifications. A contemporary example is the work of Donval et al. [5], who utilized Ant Colony Optimization with dynamic pheromones to jointly navigate routing and charging decisions. While these heuristic methodologies construct feasible routes effectively, they fundamentally treat the optimization objective as a black box. Very few works rigorously explore the problem's convex geometric properties or apply relaxation techniques to establish definitive theoretical lower bounds, making it difficult to assess absolute solution quality.\\
 \textbf{Intended Contributions:} This project pivots from heuristic search to \textbf{Convex Optimization}. By formulating the E-VRPTW as a Mixed-Integer Convex Program (MICP), we apply \textbf{Lagrangian Relaxation} to decouple complex constraints (time windows, load, and battery capacity). This theoretically rigorous approach allows us to establish baseline optimality certificates computationally using Subgradient Optimization.\\
-\textbf{Organization:} This report formally defines the Primal integer problem (Section 2.1), derives its Dual formulation via Lagrangian Relaxation (Section 2.2), discusses the continuous KKT optimality conditions (Section 2.3), details the Subgradient Optimization Algorithm (Section 3), and concludes with experimental results and duality gap analysis computed across various benchmark instances (Section 4 \& 5).
+\textbf{Organization:} This report formally defines the Primal integer problem, derives its Dual formulation via Lagrangian Relaxation, and discusses the continuous KKT optimality conditions (Section 2). We then outline our dataset, algorithmic approach, and Subgradient Optimization algorithm (Section 3), concluding with empirical results and duality gap analysis computed across various benchmark instances (Section 4).
 
 \section{Statement of the Problem}
 We define the problem on a directed graph $G=(V, A)$. Let $C$ be the customer set, $F$ the charging stations, and node $0$ the depot. The objective is to minimize total travel time/distance for a fleet of $m$ vehicles. Let $x_{ij} \in \{0, 1\}$ equal $1$ if a vehicle travels from node $i$ to $j$. Variables $\tau_i, u_i, y_i$ capture the arrival time, remaining load, and remaining battery upon departure from node $i$. Variables $d_{ij}, t_{ij}, e_{ij}, q_i$ encode distance, travel time, energy cost, and demand respectively.
@@ -68,7 +71,7 @@ The \textbf{Lagrangian Dual Problem} aims to find the tightest possible lower bo
 \end{align}
 Because $g(\lambda)$ is the pointwise minimum of a family of affine functions (one for each feasible primal solution), the dual function is piecewise linear and strictly concave. This mathematical property guarantees that we can search for the maximal bound without getting trapped in local maxima, motivating our use of subgradient search techniques.
 
-\subsection{KKT Optimality Conditions}
+\subsection{KKT Conditions}
 For the continuous LP relaxation ($0 \le x_{ij} \le 1$), the problem satisfies Slater's condition and is strictly convex. A primal-dual pair $(x^*, \tau^*, u^*, y^*, \lambda^*)$ optimally solves the relaxation if and only if it satisfies the Karush-Kuhn-Tucker (KKT) conditions:
 \begin{itemize}
     \item \textbf{Primal Feasibility:} Constraints (\ref{c:degree}) -- (\ref{c:battery}) hold with $x_{ij}^* \in [0,1]$.
@@ -78,6 +81,19 @@ For the continuous LP relaxation ($0 \le x_{ij} \le 1$), the problem satisfies S
 \end{itemize}
 
 \section{Intended Approaches}
+
+\subsection{Sample Dataset}
+Our analysis utilizes the well-regarded Schneider (2014) \texttt{evrptw\_instances} dataset, specifically focusing on the 5-node and 10-node localized clusters. For each location (depot, recharging station, or customer), the dataset provides:
+\begin{itemize}
+    \item \textbf{Coordinates \& Distance}: $(x, y)$ coordinates to compute Euclidean inter-location travel times.
+    \item \textbf{Demands \& Time Windows}: Freighter capacity requirements ($q_i$) and active operational operational windows ($[RD_i, DD_i]$).
+    \item \textbf{EV Logistics Parameters}: Vehicle specific constraints including Load Capacity ($C=200$), Battery Capacity ($Q=77.75$), fuel consumption rate ($r=1.0$), and inverse refueling rate ($g=3.47$).
+\end{itemize}
+
+\subsection{Solver Approach}
+With non-continuous decisions tracking individual paths across time, our primal formulation is a Mixed-Integer Convex Program (MICP). Standard MILP solvers face severe computational challenges scaling up due to the "Big-M" constraints. By migrating these into the objective through our Lagrangian penalty framework, we efficiently simplify the subproblem. This decoupled subproblem acts strictly as a minimum cost network flow algorithm which can be resolved in polynomial bounds using the \texttt{PuLP} framework atop the CBC solver.
+
+\subsection{Algorithm Logic}
 Because the dual function $g(\lambda)$ is piecewise linear and concave, but non-differentiable at junction solutions, standard gradient ascent cannot reliably converge. Thus, we implemented the \textbf{Subgradient Optimization Method}.
 \begin{algorithm}[H]
 \caption{Subgradient Optimization iteratively solving $g(\lambda)$}
@@ -93,28 +109,51 @@ Because the dual function $g(\lambda)$ is piecewise linear and concave, but non-
 \end{algorithmic}
 \end{algorithm}
 
-\section{Experimental Duality Gap Analysis}
-We computationally implemented the framework natively using Python's \texttt{PuLP} framework running over the CBC solver engine. We benchmarked the E-VRPTW baseline LP Bound against our proposed subgradient LR Bound upon Schneider et al.'s 2014 synthetic benchmark clusters.
+\section{Results \& Conclusion}
+\subsection{Conjectured Results (Duality Gap Analysis)}
+We computationally implemented the framework natively using Python's \texttt{PuLP} framework running over the CBC solver engine. We benchmarked the E-VRPTW baseline LP Bound against our proposed subgradient LR Bound upon Schneider et al.'s 2014 synthetic benchmark clusters, specifically targeting exactly valid instances across multiple \texttt{c, r,} and \texttt{rc} clusters with 5 and 10 nodes.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{duality_gap_plot.png}
+    \caption{Empirical evaluation of the LP Bound vs our Lagrangian bounding execution convergence across all 15 valid instances.}
+\end{figure}
 
 \begin{table}[H]
     \centering
-    \begin{tabular}{@{}lcccc@{}}
+    \caption{Detailed Duality Gap Analysis across Valid Instances}
+    \vspace{0.1cm}
+    \begin{tabular}{@{}lccccc@{}}
     \toprule
-    \textbf{Instance} & \textbf{Customers} & \textbf{Continuous LP Bound} & \textbf{Lagrangian Bound} & \textbf{Gap (\%)} \\
+    \textbf{Instance} & \textbf{Customers} & \textbf{LP Bound} & \textbf{LR Bound} & \textbf{Gap (\%)} & \textbf{LR Time (s)} \\
     \midrule
-    \texttt{c103C5} & 5 & 113.93 & 106.46 & $-6.56\%$ \\
-    \texttt{c101C5} & 5 & 145.36 & 130.93 & $-9.93\%$ \\
-    \texttt{c202C10} & 10 & 132.68 & 129.64 & $-2.29\%$ \\
-    \texttt{c101C10} & 10 & 154.68 & 148.88 & $-3.75\%$ \\
+    \texttt{c101C10} & 10 & 154.68 & 148.88 & $-3.75\%$ & 2.89 \\
+    \texttt{c101C5} & 5 & 145.36 & 130.93 & $-9.93\%$ & 2.13 \\
+    \texttt{c103C5} & 5 & 113.93 & 106.46 & $-6.56\%$ & 2.09 \\
+    \texttt{c202C10} & 10 & 132.68 & 129.64 & $-2.29\%$ & 2.84 \\
+    \texttt{c206C5} & 5 & 139.03 & 123.52 & $-11.16\%$ & 2.24 \\
+    \texttt{c208C5} & 5 & 81.48 & 77.23 & $-5.22\%$ & 2.21 \\
+    \texttt{r103C10} & 10 & 110.20 & 105.77 & $-4.02\%$ & 2.86 \\
+    \texttt{r104C5} & 5 & 85.28 & 85.09 & $-0.22\%$ & 2.39 \\
+    \texttt{r105C5} & 5 & 109.70 & 108.11 & $-1.45\%$ & 2.32 \\
+    \texttt{r201C10} & 10 & 141.44 & 137.54 & $-2.76\%$ & 3.00 \\
+    \texttt{r202C5} & 5 & 107.10 & 95.84 & $-10.51\%$ & 2.39 \\
+    \texttt{rc105C5} & 5 & 112.27 & 105.41 & $-6.11\%$ & 2.44 \\
+    \texttt{rc201C10} & 10 & 146.01 & 135.57 & $-7.15\%$ & 2.91 \\
+    \texttt{rc204C5} & 5 & 84.36 & 84.23 & $-0.15\%$ & 2.37 \\
+    \texttt{rc208C5} & 5 & 88.94 & 83.84 & $-5.73\%$ & 2.33 \\
     \bottomrule
     \end{tabular}
-    \caption{Empirical evaluation of the LP Bound vs our Lagrangian bounding execution convergence.}
 \end{table}
 
-\section{Conclusion}
-\textbf{Conjectured Validation and Summary:} Our outlined hypothesis postulated that Lagrangian Relaxation could potentially yield a tighter optimality certificate bound. However, our formalized implementation explicitly demonstrates a central mathematical property: because our decomposed subproblem strips routing complexity directly down into flow conservation and set degree constraints, the subproblem inherits the \textbf{Integrality Property}. Consequently, optimization geometry dictates that the theoretical Lagrangian Dual bound precisely coincides with the continuous LP relaxation ($Z_{LR} = Z_{LP}$). Therefore, computationally, the iteratively optimized $Z_{LR}$ approaches $Z_{LP}$ asymptotically from below (as evidenced by $<10\%$ negative gap bounds) rather than surpassing it. 
+\textbf{Solver Results}
+\begin{itemize}
+    \item The continuous LP relaxation provides a baseline bound by fully relaxing all geographic integer constraints. Across our 15 successful test cases, the Lagrangian bounds range from $-0.15\%$ to $-11.16\%$ from the optimal LP bound.
+    \item The solver effectively drives up the Lagrangian lower bound starting from highly negative initialization values. Because our decomposed subproblem strips routing complexity directly down into flow conservation and set degree constraints, the subproblem inherits the \textbf{Integrality Property}. Consequently, optimization geometry dictates that the theoretical Lagrangian Dual bound exactly matches the continuous LP relaxation ($Z_{LR} = Z_{LP}$). Therefore, computationally, the iteratively optimized $Z_{LR}$ validly approaches $Z_{LP}$ asymptotically from below rather than surpassing it.
+\end{itemize}
 
-\textbf{Future Works:} Extending this robust theoretical bounding groundwork via Dantzig-Wolfe decomposition and Branch-and-Price algorithms. Unlike standard subproblems, retaining the time windows recursively as an Elementary Shortest Path Problem with Resource Constraints (ESPPRC) effectively breaks the integrality property, granting access strictly tighter optimal bounds vital for large-scale E-VRPTW fleets.
+\subsection{Conclusion \& Future Works}
+By exploiting the duality of the E-VRPTW, we offer computational convergence bounds for optimal geometries that standard route-optimization heuristics treat simply as black boxes. By extending this robust theoretical bounding groundwork via Dantzig-Wolfe decomposition and Branch-and-Price algorithms in future operations, the structural model can be vastly enhanced. Unlike standard subproblems, retaining the time windows recursively as an Elementary Shortest Path Problem with Resource Constraints (ESPPRC) effectively breaks the integrality property, granting access to strictly tighter optimal bounds crucial for orchestrating large-scale real-world EV logistics operations seamlessly.
 
 \section*{References}
 \begin{enumerate} [label={[\arabic*]}]
